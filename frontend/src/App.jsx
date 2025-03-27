@@ -14,6 +14,8 @@ import Viewticket1 from './pages/Viewticket1'
 import Warden1 from './pages/Warden1'
 import LoginPage from './pages/loginpage'
 import CreateAccount from './pages/createacct'
+import Hod1 from './pages/Hod1'
+
 
 //import MovementRequest from './pages/Request1';
 
@@ -34,6 +36,7 @@ const App = () => {
         <Route path='/warden' element={<Warden1 />} />
         <Route path='/loginpage' element={<LoginPage/>} />
         <Route path='/createacct' element={<CreateAccount/>} />
+        <Route path='/Hod1' element={<Hod1/>} />
 
 
 

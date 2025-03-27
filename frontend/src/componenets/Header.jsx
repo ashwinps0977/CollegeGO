@@ -20,12 +20,7 @@ const Header = () => {
         </div>
 
         {/* Apply Pass Button - Navigates to Request1 Page */}
-        <button
-          onClick={() => navigate("/request1")} // Navigate to Request1 page
-          className="flex items-center gap-2 bg-white px-8 py-3 rounded-full text-gray-600 text-sm m-auto md:m-0 hover:scale-105 transition-all duration-300"
-        >
-          Apply pass <img className="w-3" src={assets.arrow_icon} alt="" />
-        </button>
+       
       </div>
 
       {/*-------Right side------*/}

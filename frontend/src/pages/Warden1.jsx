@@ -38,9 +38,6 @@ const Warden1 = () => {
           <li className="p-2 hover:bg-gray-200 cursor-pointer">Request History</li>
           <li className="p-2 hover:bg-gray-200 cursor-pointer">Approved Passes</li>
           <li className="p-2 hover:bg-gray-200 cursor-pointer">Rejected Requests</li>
-          <li className="p-2 hover:bg-gray-200 cursor-pointer">Notifications</li>
-          <li className="p-2 hover:bg-gray-200 cursor-pointer">Profile</li>
-          <li className="p-2 hover:bg-gray-200 cursor-pointer">Settings</li>
           <li className="p-2 hover:bg-gray-200 cursor-pointer text-red-600">Logout</li>
         </ul>
       </aside>

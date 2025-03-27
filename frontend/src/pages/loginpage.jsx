@@ -9,10 +9,10 @@ const LoginPage = () => {
   const navigate = useNavigate();
 
   // Function to change button color on click
-  const getButtonStyle = (role) =>
-    `px-6 py-3 rounded-lg text-white font-semibold transition duration-300 ${
-      selectedRole === role ? "bg-green-600 shadow-lg" : "bg-blue-500 hover:bg-blue-600"
-    }`;
+  const getButtonStyle = (role) => `
+    px-6 py-3 rounded-lg text-white font-semibold transition duration-300 
+    ${selectedRole === role ? "bg-green-600 shadow-lg" : "bg-blue-500 hover:bg-blue-600"}
+  `;
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -27,39 +27,31 @@ const LoginPage = () => {
       return;
     }
 
-    // Fetch stored user data
-    const savedUser = JSON.parse(localStorage.getItem("user"));
+    // Clear any previously stored user data
+    localStorage.removeItem("user");
 
-    if (savedUser && savedUser.username === username && savedUser.password === password) {
-      alert(`Welcome, ${savedUser.name}!`);
-      
-      // Redirect based on role
-      if (selectedRole === "Student") navigate("/dashboard");
-      else if (selectedRole === "HOD") navigate("/hod-panel");
-      else if (selectedRole === "Warden") navigate("/warden-panel");
-    } else {
-      setError("Invalid Username or Password!");
-    }
+    alert("Login successful!");
+    
+    // Redirect based on role
+    if (selectedRole === "Student") navigate("/request1");
+    else if (selectedRole === "HOD") navigate("/Hod1");  // Redirecting to Hod1.jsx page
+    else if (selectedRole === "Warden") navigate("/warden");
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-r from-blue-500 to-indigo-600">
       {/* Header */}
-      <div className="bg-blue-600 w-full text-white text-2xl font-bold py-4 text-center shadow-md">
+      <div className="bg-white w-full text-blue-600 text-3xl font-extrabold py-5 text-center shadow-lg rounded-b-lg">
         CollegeGO
       </div>
 
       {/* Card Container */}
-      <div className="bg-white shadow-lg rounded-lg p-8 w-full max-w-md mt-8">
-        <h2 className="text-center text-xl font-semibold text-gray-700">
-          A Safe Eco-Pass
-        </h2>
-        <h3 className="text-center text-lg font-medium text-gray-600 mt-2">
-          Select Your Role
-        </h3>
+      <div className="bg-white shadow-2xl rounded-xl p-10 w-full max-w-md mt-10"> 
+        <h2 className="text-center text-2xl font-bold text-gray-700">A Safe Eco-Pass</h2>
+        <h3 className="text-center text-lg font-medium text-gray-500 mt-2">Select Your Role</h3>
 
         {/* Role Selection */}
-        <div className="flex justify-center gap-4 mt-4">
+        <div className="flex justify-center gap-4 mt-6">
           <button className={getButtonStyle("Student")} onClick={() => setSelectedRole("Student")}>
             Student
           </button>
@@ -76,25 +68,30 @@ const LoginPage = () => {
 
         {/* Input Fields */}
         <form onSubmit={handleLogin} className="mt-6">
-          <input
-            type="text"
-            placeholder="Enter your username or ID"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <input
-            type="password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full mt-4 px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Enter your username or ID"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+            />
+          </div>
+
+          <div className="relative mt-4">
+            <input
+              type="password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+            />
+          </div>
 
           {/* Login Button */}
           <button
             type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg mt-6 shadow-md transition duration-300"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg mt-6 shadow-lg transform transition duration-300 hover:scale-105"
           >
             Login
           </button>
