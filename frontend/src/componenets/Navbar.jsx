@@ -23,11 +23,7 @@ const Navbar = () => {
                 <hr className='border-none outline-none h-0.5 bg-primary w-3/5 m-auto hidden'/>
             </NavLink>
 
-            <NavLink to='/myticket1
-            
-            .
-            .
-            1 1'>
+            <NavLink to='/tick'>
                 <li className='py-1'>TICKET</li>
                 <hr className='border-none outline-none h-0.5 bg-primary w-3/5 m-auto hidden' />
             </NavLink>

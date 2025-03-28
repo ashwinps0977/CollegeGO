@@ -17,6 +17,7 @@ import CreateAccount from './pages/createacct'
 import Hod1 from './pages/Hod1'
 
 
+
 //import MovementRequest from './pages/Request1';
 
 const App = () => {
@@ -37,6 +38,8 @@ const App = () => {
         <Route path='/loginpage' element={<LoginPage/>} />
         <Route path='/createacct' element={<CreateAccount/>} />
         <Route path='/Hod1' element={<Hod1/>} />
+        
+        
 
 
 
