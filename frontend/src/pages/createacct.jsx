@@ -1,5 +1,6 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
 const CreateAccount = () => {
   const navigate = useNavigate();
@@ -9,45 +10,50 @@ const CreateAccount = () => {
   const [formData, setFormData] = useState({
     name: "",
     username: "",
-    branch: "",
-    semester: "",
     email: "",
     mobile: "",
     password: "",
+    confirmPassword: "",
+    branch: "",
+    semester: "",
   });
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const handleChange = (e) => {
     const { name, value } = e.target;
 
     if (name === "name" && !/^[A-Za-z\s]*$/.test(value)) return;
-    if (name === "username") {
-      const usernamePattern = new RegExp(`^\\d{2}(${branches.join("|")})\\d{3}$`);
-      if (!usernamePattern.test(value)) return;
-    }
-    if (name === "mobile" && (!/^\d{0,10}$/.test(value) || value.length > 10)) return;
+    if (name === "mobile" && (!/^\d*$/.test(value) || value.length > 10)) return;
 
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    setSuccess("");
 
-    if (formData.mobile.length !== 10) {
-      alert("Mobile number must be exactly 10 digits.");
-      return;
+    setLoading(true);
+    try {
+      console.log("Sending request to backend...");
+
+      const response = await axios.post("http://localhost:5001/register", formData);
+
+      console.log("Response from backend:", response.data);
+
+      setSuccess(response.data.message);
+      localStorage.setItem("user", JSON.stringify(response.data.user));
+
+      setTimeout(() => navigate("/loginpage"), 2000);
+    } catch (error) {
+      console.error("Error registering user:", error.response?.data || error);
+      setError(error.response?.data?.error || "Error registering user");
+    } finally {
+      setLoading(false);
     }
-
-    localStorage.setItem("user", JSON.stringify(formData));
-    alert("Account Created Successfully!");
-
-    // Reset only the username and password fields
-    setFormData((prevState) => ({
-      ...prevState,
-      username: "",
-      password: "",
-    }));
-
-    navigate("/loginpage");
   };
 
   return (
@@ -55,21 +61,18 @@ const CreateAccount = () => {
       <div className="bg-white p-8 rounded-lg shadow-lg w-96">
         <h2 className="text-2xl font-semibold text-gray-800 text-center">Create Account</h2>
 
+        {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+        {success && <p className="text-green-500 text-sm text-center">{success}</p>}
+
         <form className="mt-6" onSubmit={handleSubmit}>
-          {[
-            { label: "Name", name: "name", type: "text" },
-            { label: "Username", name: "username", type: "text" },
-            { label: "Email", name: "email", type: "email" },
-            { label: "Mobile No", name: "mobile", type: "tel" },
-            { label: "Password", name: "password", type: "password" },
-          ].map((field) => (
-            <div key={field.name} className="mt-4">
-              <label className="block text-gray-700 text-sm">{field.label}</label>
+          {["name", "username", "email", "mobile", "password", "confirmPassword"].map((field) => (
+            <div key={field} className="mt-4">
+              <label className="block text-gray-700 text-sm">{field.charAt(0).toUpperCase() + field.slice(1)}</label>
               <input
-                type={field.type}
-                name={field.name}
-                placeholder={`Enter your ${field.label.toLowerCase()}`}
-                value={formData[field.name]}
+                type={field.includes("password") ? "password" : "text"}
+                name={field}
+                placeholder={`Enter your ${field}`}
+                value={formData[field]}
                 onChange={handleChange}
                 className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-400 focus:outline-none"
                 required
@@ -88,9 +91,7 @@ const CreateAccount = () => {
             >
               <option value="">Select Branch</option>
               {branches.map((branch) => (
-                <option key={branch} value={branch}>
-                  {branch}
-                </option>
+                <option key={branch} value={branch}>{branch}</option>
               ))}
             </select>
           </div>
@@ -106,9 +107,7 @@ const CreateAccount = () => {
             >
               <option value="">Select Semester</option>
               {semesters.map((sem) => (
-                <option key={sem} value={sem}>
-                  {sem}
-                </option>
+                <option key={sem} value={sem}>{sem}</option>
               ))}
             </select>
           </div>
@@ -116,13 +115,14 @@ const CreateAccount = () => {
           <button
             type="submit"
             className="w-full mt-6 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
+            disabled={loading}
           >
-            Sign Up
+            {loading ? "Signing Up..." : "Sign Up"}
           </button>
         </form>
 
         <p className="text-gray-600 text-sm text-center mt-4">
-          Already have an account?{" "}
+          Already have an account?{' '}
           <span
             className="text-blue-600 hover:underline cursor-pointer"
             onClick={() => navigate("/loginpage")}

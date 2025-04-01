@@ -1,26 +1,34 @@
 import React, { useState, useEffect } from "react";
+import axios from "axios";
 
 const Warden1 = () => {
   const [requests, setRequests] = useState([]);
 
-  // Load requests from localStorage
+  // Fetch approved requests from the backend
   useEffect(() => {
-    const savedRequests = JSON.parse(localStorage.getItem("wardenRequests")) || [];
-    setRequests(savedRequests);
+    fetchApprovedRequests();
   }, []);
+
+  const fetchApprovedRequests = async () => {
+    try {
+      const response = await axios.get("http://localhost:5001/getApprovedRequests");
+      setRequests(response.data);
+    } catch (error) {
+      console.error("❌ Error fetching approved requests:", error);
+    }
+  };
 
   // Handle Approval/Rejection
   const handleDecision = (id, status) => {
     const updatedRequests = requests.map((req) =>
-      req.id === id ? { ...req, status } : req
+      req._id === id ? { ...req, status } : req
     );
 
     setRequests(updatedRequests);
-    localStorage.setItem("wardenRequests", JSON.stringify(updatedRequests));
 
     // Move approved requests to Faculty1.jsx
     if (status === "Approved") {
-      const approvedRequest = updatedRequests.find(req => req.id === id);
+      const approvedRequest = updatedRequests.find(req => req._id === id);
       const facultyRequests = JSON.parse(localStorage.getItem("facultyRequests")) || [];
       facultyRequests.push(approvedRequest);
       localStorage.setItem("facultyRequests", JSON.stringify(facultyRequests));
@@ -31,7 +39,7 @@ const Warden1 = () => {
     <div className="flex min-h-screen bg-gray-100">
       {/* Sidebar */}
       <aside className="w-1/5 bg-white shadow-md p-4">
-        <h2 className="text-2xl font-bold text-blue-800 mb-6"></h2>
+        <h2 className="text-2xl font-bold text-blue-800 mb-6">Warden Dashboard</h2>
         <ul className="space-y-2">
           <li className="bg-blue-800 text-white p-2 rounded">Dashboard</li>
           <li className="p-2 hover:bg-gray-200 cursor-pointer">New Request</li>
@@ -48,35 +56,9 @@ const Warden1 = () => {
           <h2 className="text-2xl font-semibold">Warden Dashboard</h2>
         </header>
 
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-white p-4 shadow-md rounded text-center">
-            <p className="text-lg font-semibold">Total Requests</p>
-            <p className="text-2xl font-bold text-blue-600">{requests.length}</p>
-          </div>
-          <div className="bg-white p-4 shadow-md rounded text-center">
-            <p className="text-lg font-semibold">Approved</p>
-            <p className="text-2xl font-bold text-green-600">
-              {requests.filter((req) => req.status === "Approved").length}
-            </p>
-          </div>
-          <div className="bg-white p-4 shadow-md rounded text-center">
-            <p className="text-lg font-semibold">Pending</p>
-            <p className="text-2xl font-bold text-yellow-600">
-              {requests.filter((req) => req.status === "Pending").length}
-            </p>
-          </div>
-          <div className="bg-white p-4 shadow-md rounded text-center">
-            <p className="text-lg font-semibold">Rejected</p>
-            <p className="text-2xl font-bold text-red-600">
-              {requests.filter((req) => req.status === "Rejected").length}
-            </p>
-          </div>
-        </div>
-
         {/* Requests Table */}
         <div className="bg-white p-6 shadow-md rounded">
-          <h3 className="text-xl font-semibold mb-4">Recent Movement Requests</h3>
+          <h3 className="text-xl font-semibold mb-4">Recent Approved Requests</h3>
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gray-200">
@@ -84,50 +66,32 @@ const Warden1 = () => {
                 <th className="p-2">Date</th>
                 <th className="p-2">Purpose</th>
                 <th className="p-2">Destination</th>
-                <th className="p-2">Time Out</th>
-                <th className="p-2">Expected Return</th>
                 <th className="p-2">Status</th>
                 <th className="p-2">Actions</th>
               </tr>
             </thead>
             <tbody>
               {requests.map((req) => (
-                <tr key={req.id} className="border-t">
-                  <td className="p-2">#{req.id}</td>
+                <tr key={req._id} className="border-t">
+                  <td className="p-2">#{req._id}</td>
                   <td className="p-2">{req.date}</td>
                   <td className="p-2">{req.purpose}</td>
                   <td className="p-2">{req.destination}</td>
-                  <td className="p-2">{req.timeOut}</td>
-                  <td className="p-2">{req.expectedReturn}</td>
                   <td className="p-2">
                     <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
                       req.status === "Approved" ? "bg-green-200 text-green-800" :
-                      req.status === "Pending" ? "bg-yellow-200 text-yellow-800" :
                       "bg-red-200 text-red-800"
                     }`}>
                       {req.status}
                     </span>
                   </td>
                   <td className="p-2 flex space-x-2">
-                    {req.status === "Pending" && (
-                      <>
-                        <button
-                          onClick={() => handleDecision(req.id, "Approved")}
-                          className="px-3 py-1 bg-green-600 text-white rounded"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => handleDecision(req.id, "Rejected")}
-                          className="px-3 py-1 bg-red-600 text-white rounded"
-                        >
-                          Reject
-                        </button>
-                      </>
-                    )}
-                    {req.status === "Rejected" && (
-                      <button className="px-3 py-1 bg-gray-600 text-white rounded">
-                        View Details
+                    {req.status === "Approved" && (
+                      <button
+                        onClick={() => handleDecision(req._id, "Final Approved")}
+                        className="px-3 py-1 bg-blue-600 text-white rounded"
+                      >
+                        Final Approve
                       </button>
                     )}
                   </td>
