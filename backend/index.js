@@ -156,6 +156,26 @@ app.get("/getUser/:username", async (req, res) => {
   }
 });
 
+// GET USER REQUESTS
+app.get("/getUserRequests/:username", async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.params.username });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const requests = await Request.find({ 
+      name: user.name,
+      status: "Approved"
+    }).sort({ createdAt: -1 });
+
+    res.json(requests);
+  } catch (error) {
+    console.error("Error fetching user requests:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 // UPDATE USER PROFILE
 app.put("/updateUser/:username", async (req, res) => {
   try {
@@ -248,7 +268,7 @@ app.put("/updateRequest/:id", async (req, res) => {
 app.put("/finalApproveRequest/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { action, notificationMessage } = req.body;
+    const { action, notificationMessage, requestData } = req.body;
 
     // Validate action
     if (!action || !["approve", "reject"].includes(action)) {
@@ -267,8 +287,8 @@ app.put("/finalApproveRequest/:id", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Validate mobile number
-    if (!user.mobile || !/^\d{10}$/.test(user.mobile)) {
+    // Validate mobile number (only if we're approving and need to send SMS)
+    if (action === "approve" && (!user.mobile || !/^\d{10}$/.test(user.mobile))) {
       return res.status(400).json({ 
         error: "Invalid mobile number format",
         details: `Mobile number should be 10 digits, got: ${user.mobile}`
@@ -291,10 +311,18 @@ app.put("/finalApproveRequest/:id", async (req, res) => {
               message: notificationMessage || "YOUR REQUEST HAS BEEN APPROVED - MAKE PAYMENT TO GRAB YOUR TICKET",
               type: "payment",
               requestId: request._id,
-              createdAt: new Date()
+              createdAt: new Date(),
+              requestDetails: requestData || {
+                purpose: request.purpose,
+                date: request.date,
+                destination: request.destination,
+                status: "Approved"
+              }
             }
           }
         };
+        
+        // Update user with notification
         await User.findOneAndUpdate(
           { name: request.name },
           userUpdate,
@@ -302,23 +330,28 @@ app.put("/finalApproveRequest/:id", async (req, res) => {
         );
 
         // Send SMS notification
-        const message = await twilioClient.messages.create({
-          body: "YOUR REQUEST HAS BEEN APPROVED. MAKE PAYMENT TO GET YOUR BUS TICKET",
-          to: `+91${user.mobile}`,
-          from: process.env.TWILIO_PHONE_NUMBER
-        });
-        console.log(`✅ SMS sent to ${user.mobile}`, message.sid);
-        smsResult.sent = true;
-      } catch (smsError) {
-        console.error("❌ Twilio Error:", {
-          code: smsError.code,
-          message: smsError.message,
-          moreInfo: smsError.moreInfo
-        });
-        smsResult.error = {
-          code: smsError.code,
-          message: smsError.message
-        };
+        try {
+          const message = await twilioClient.messages.create({
+            body: notificationMessage || "YOUR REQUEST HAS BEEN APPROVED. MAKE PAYMENT TO GET YOUR BUS TICKET",
+            to: `+91${user.mobile}`,
+            from: process.env.TWILIO_PHONE_NUMBER
+          });
+          console.log(`✅ SMS sent to ${user.mobile}`, message.sid);
+          smsResult.sent = true;
+        } catch (smsError) {
+          console.error("❌ Twilio Error:", {
+            code: smsError.code,
+            message: smsError.message,
+            moreInfo: smsError.moreInfo
+          });
+          smsResult.error = {
+            code: smsError.code,
+            message: smsError.message
+          };
+        }
+      } catch (error) {
+        console.error("❌ Error adding notification:", error);
+        // Continue even if notification fails since request is already approved
       }
     }
 
@@ -340,20 +373,41 @@ app.put("/finalApproveRequest/:id", async (req, res) => {
   }
 });
 
-// PAYMENT ROUTE
+// PAYMENT ROUTE - Updated version
 app.post("/makePayment", async (req, res) => {
   try {
     const { requestId } = req.body;
     
-    // Update request status to "Paid"
-    await Request.findByIdAndUpdate(requestId, { paymentStatus: "Paid" });
+    // Find and update the request
+    const updatedRequest = await Request.findByIdAndUpdate(
+      requestId, 
+      { paymentStatus: "Paid" },
+      { new: true }
+    );
     
-    // Generate bus pass (you'll need to implement this)
-    // await generateBusPass(requestId);
+    if (!updatedRequest) {
+      return res.status(404).json({ error: "Request not found" });
+    }
+
+    // Find the user who made the request
+    const user = await User.findOne({ name: updatedRequest.name });
     
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
     res.json({ 
       success: true,
-      message: "Payment successful. Bus pass generated."
+      message: "Payment successful. Bus pass generated.",
+      ticketData: {
+        name: user.name,
+        department: user.branch,
+        semester: user.semester,
+        date: updatedRequest.date,
+        purpose: updatedRequest.purpose,
+        destination: updatedRequest.destination,
+        requestId: updatedRequest._id
+      }
     });
   } catch (error) {
     console.error("Payment error:", error);

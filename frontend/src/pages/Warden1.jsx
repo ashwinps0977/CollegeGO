@@ -42,7 +42,12 @@ const Warden1 = () => {
 
       const response = await axios.put(`http://localhost:5001/finalApproveRequest/${id}`, { 
         action: "approve",
-        notificationMessage: `YOUR REQUEST HAS BEEN APPROVED - ${requestToApprove.purpose.toUpperCase()} ON ${new Date(requestToApprove.date).toLocaleDateString()} - MAKE PAYMENT TO GRAB YOUR TICKET`
+        notificationMessage: `YOUR REQUEST HAS BEEN APPROVED - ${requestToApprove.purpose.toUpperCase()} ON ${new Date(requestToApprove.date).toLocaleDateString()} - MAKE PAYMENT TO GRAB YOUR TICKET`,
+        requestData: {
+          purpose: requestToApprove.purpose,
+          date: requestToApprove.date,
+          destination: requestToApprove.destination
+        }
       });
       
       // Optimistic UI update
