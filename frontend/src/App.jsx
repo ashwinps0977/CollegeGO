@@ -48,6 +48,8 @@ const App = () => {
         <Route path='/Hod1' element={<Hod1 />} />
         <Route path='/tick' element={<Ticketbooking1 />} />
         <Route path='/pay' element={<Payment />} />
+        // In your frontend router (App.js or similar)
+        <Route path="/payment/:requestId" element={<Payment />} />
       </Routes>
       <Footer />
       <div>

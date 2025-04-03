@@ -1,13 +1,15 @@
 const mongoose = require("mongoose");
 
-const requestSchema = new mongoose.Schema({
-  name: String,
-  branch: String,
-  semester: String,
-  purpose: String,
-  destination: String,
-  date: String,
-  status: { type: String, default: "Pending" }
+const RequestSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  branch: { type: String, required: true },
+  semester: { type: String, required: true },
+  purpose: { type: String, required: true },
+  destination: { type: String, required: true },
+  date: { type: Date, required: true },
+  status: { type: String, default: "Pending" },
+  finalApproval: { type: String, default: "Pending" },
+  createdAt: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.model("Request", requestSchema);
+module.exports = mongoose.model("Request", RequestSchema);
