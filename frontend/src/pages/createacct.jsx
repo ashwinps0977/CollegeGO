@@ -45,8 +45,17 @@ const CreateAccount = () => {
       console.log("Response from backend:", response.data);
 
       setSuccess(response.data.message);
-      localStorage.setItem("user", JSON.stringify(response.data.user));
-
+      
+      // Store user data in sessionStorage
+      sessionStorage.setItem("user", JSON.stringify({
+        username: formData.username,
+        name: formData.name,
+        role: "Student" // Since this is the student registration
+      }));
+      
+      // Dispatch event to notify Navbar and other components
+      window.dispatchEvent(new Event('user-authenticated'));
+      
       setTimeout(() => navigate("/loginpage"), 2000);
     } catch (error) {
       console.error("Error registering user:", error.response?.data || error);

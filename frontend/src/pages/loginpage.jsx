@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -11,6 +11,18 @@ const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [resetMessage, setResetMessage] = useState("");
   const navigate = useNavigate();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    const storedUser = sessionStorage.getItem("user");
+    if (storedUser) {
+      const user = JSON.parse(storedUser);
+      if (user.role === "Student") navigate("/request1");
+      else if (user.role === "HOD") navigate("/Hod1");
+      else if (user.role === "Warden") navigate("/warden");
+      else if (user.role === "Bus-Faculty") navigate("/staff-dashboard");
+    }
+  }, [navigate]);
 
   const getButtonStyle = (role) => `
     px-6 py-3 rounded-lg text-white font-semibold transition duration-300 
@@ -39,12 +51,33 @@ const LoginPage = () => {
       });
 
       console.log("✅ Response:", response.data);
-      sessionStorage.setItem("user", JSON.stringify(response.data.user));
+      sessionStorage.setItem("user", JSON.stringify({
+        ...response.data.user,
+        role: selectedRole // Make sure role is included
+      }));
+      
+      // Dispatch event to notify Navbar and other components
+      window.dispatchEvent(new Event('user-authenticated'));
+      
       alert("Login successful!");
 
-      if (selectedRole === "Student") navigate("/request1");
-      else if (selectedRole === "HOD") navigate("/Hod1");
-      else if (selectedRole === "Warden") navigate("/warden");
+      // Updated redirection logic
+      switch (selectedRole) {
+        case "Student":
+          navigate("/request1");
+          break;
+        case "HOD":
+          navigate("/Hod1");
+          break;
+        case "Warden":
+          navigate("/warden");
+          break;
+        case "Bus-Faculty":
+          navigate("/staff-dashboard");
+          break;
+        default:
+          navigate("/");
+      }
     } catch (error) {
       console.error("❌ Login Error:", error.response?.data || error);
       setError(error.response?.data?.error || "Invalid username or password");
@@ -95,6 +128,9 @@ const LoginPage = () => {
               </button>
               <button className={getButtonStyle("Warden")} onClick={() => setSelectedRole("Warden")}>
                 Warden
+              </button>
+              <button className={getButtonStyle("Bus-Faculty")} onClick={() => setSelectedRole("Bus-Faculty")}>
+                Bus Faculty
               </button>
             </div>
 

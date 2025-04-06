@@ -11,6 +11,16 @@ const Hod1 = () => {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [filter, setFilter] = useState("all");
+  const [notification, setNotification] = useState(null);
+
+  // Route protection - check if user is logged in
+  useEffect(() => {
+    const storedUser = sessionStorage.getItem("user");
+    if (!storedUser) {
+      navigate("/");
+    }
+  }, [navigate]);
 
   const fetchRequests = async () => {
     try {
@@ -19,10 +29,21 @@ const Hod1 = () => {
       
       const response = await axios.get("http://localhost:5001/hodRequests");
       if (response.data && Array.isArray(response.data)) {
-        // Sort requests by creation date (newest first)
-        const sortedRequests = [...response.data].sort((a, b) => 
-          new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date)
-        );
+        // Enhanced sorting with proper date handling
+        const sortedRequests = [...response.data].sort((a, b) => {
+          // Get timestamps, falling back to createdAt if date doesn't exist
+          const timeA = new Date(a.date || a.createdAt).getTime();
+          const timeB = new Date(b.date || b.createdAt).getTime();
+          
+          // Additional check for invalid dates
+          if (isNaN(timeA) || isNaN(timeB)) {
+            console.warn("Invalid date found in requests:", { a, b });
+            return 0;
+          }
+          
+          // Sort newest first (descending order)
+          return timeB - timeA;
+        });
 
         setRequests(sortedRequests);
         setApprovedRequests(sortedRequests.filter(req => req.status === "Approved"));
@@ -42,27 +63,49 @@ const Hod1 = () => {
   useEffect(() => {
     fetchRequests();
     
-    // Add auto-refresh every 30 seconds
     const interval = setInterval(fetchRequests, 30000);
     return () => clearInterval(interval);
   }, []);
 
   const handleAction = async (id, newStatus) => {
     try {
-      await axios.put(`http://localhost:5001/updateRequest/${id}`, { status: newStatus });
+      const request = requests.find(req => req._id === id);
+      const response = await axios.put(`http://localhost:5001/updateRequest/${id}`, { status: newStatus });
       
-      // Optimistic UI update
-      setRequests(prevRequests =>
-        prevRequests.map(req => 
-          req._id === id ? { ...req, status: newStatus } : req
-        )
-      );
-      
-      // Refresh counts
-      fetchRequests();
+      if (response.data.success) {
+        // Optimistic UI update
+        setRequests(prevRequests =>
+          prevRequests.map(req => 
+            req._id === id ? { ...req, status: newStatus } : req
+          )
+        );
+        
+        if (newStatus === "Approved") {
+          setNotification({
+            message: `Request approved and forwarded to Warden!`,
+            type: "success",
+            requestId: id,
+            studentName: request.name
+          });
+          
+          // Clear notification after 5 seconds
+          setTimeout(() => {
+            setNotification(null);
+          }, 5000);
+        }
+
+        // Refresh counts
+        fetchRequests();
+      } else {
+        console.error("❌ Error from server:", response.data.error);
+        setError(response.data.error || "Failed to update request status");
+      }
     } catch (error) {
       console.error("❌ Error updating request status:", error);
-      alert("Failed to update request status");
+      const errorMessage = error.response?.data?.error || 
+                          error.response?.data?.details || 
+                          "Failed to update request status. Please try again.";
+      setError(errorMessage);
     }
   };
 
@@ -71,8 +114,52 @@ const Hod1 = () => {
     navigate("/");
   };
 
+  const getFilteredRequests = () => {
+    switch (filter) {
+      case "approved":
+        return approvedRequests;
+      case "pending":
+        return pendingRequests;
+      case "rejected":
+        return rejectedRequests;
+      default:
+        return requests;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 p-6">
+      {/* Error Message Display */}
+      {error && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white p-4 rounded-lg shadow-lg z-50">
+          <div className="flex items-center">
+            <FaTimesCircle className="mr-2" />
+            <span>{error}</span>
+            <button 
+              onClick={() => setError(null)} 
+              className="ml-4 text-white hover:text-gray-200"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Notification */}
+      {notification && (
+        <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
+          notification.type === "success" ? "bg-green-500" : "bg-red-500"
+        } text-white`}>
+          <div className="flex items-center">
+            <FaCheckCircle className="mr-2" />
+            <span>{notification.message}</span>
+          </div>
+          <div className="text-sm mt-1">
+            Student: {notification.studentName} | ID: {notification.requestId.substring(18, 24)}...
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-700">HOD DASHBOARD</h1>
         <button 
@@ -85,15 +172,30 @@ const Hod1 = () => {
 
       {/* Summary Boxes */}
       <div className="grid grid-cols-3 gap-6 mb-6">
-        <div className="bg-green-500 text-white p-4 rounded-lg text-center shadow-lg">
+        <div 
+          onClick={() => setFilter("approved")}
+          className={`bg-green-500 text-white p-4 rounded-lg text-center shadow-lg cursor-pointer transition hover:bg-green-600 ${
+            filter === "approved" ? "ring-4 ring-green-300" : ""
+          }`}
+        >
           <h2 className="text-xl font-bold">Approved Requests</h2>
           <p className="text-3xl font-semibold">{approvedRequests.length}</p>
         </div>
-        <div className="bg-yellow-500 text-white p-4 rounded-lg text-center shadow-lg">
+        <div 
+          onClick={() => setFilter("pending")}
+          className={`bg-yellow-500 text-white p-4 rounded-lg text-center shadow-lg cursor-pointer transition hover:bg-yellow-600 ${
+            filter === "pending" ? "ring-4 ring-yellow-300" : ""
+          }`}
+        >
           <h2 className="text-xl font-bold">Pending Requests</h2>
           <p className="text-3xl font-semibold">{pendingRequests.length}</p>
         </div>
-        <div className="bg-red-500 text-white p-4 rounded-lg text-center shadow-lg">
+        <div 
+          onClick={() => setFilter("rejected")}
+          className={`bg-red-500 text-white p-4 rounded-lg text-center shadow-lg cursor-pointer transition hover:bg-red-600 ${
+            filter === "rejected" ? "ring-4 ring-red-300" : ""
+          }`}
+        >
           <h2 className="text-xl font-bold">Rejected Requests</h2>
           <p className="text-3xl font-semibold">{rejectedRequests.length}</p>
         </div>
@@ -101,7 +203,20 @@ const Hod1 = () => {
 
       {/* Requests Table */}
       <div className="bg-white p-6 rounded-lg shadow-lg overflow-auto">
-        <h3 className="text-lg font-semibold text-gray-700 mb-4">All Movement Requests (Newest First)</h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-700">
+            {filter === "all" ? "All" : filter.charAt(0).toUpperCase() + filter.slice(1)} 
+            Movement Requests (Newest First)
+          </h3>
+          {filter !== "all" && (
+            <button 
+              onClick={() => setFilter("all")}
+              className="bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600"
+            >
+              Show All Requests
+            </button>
+          )}
+        </div>
         
         {loading ? (
           <div className="text-center py-8">
@@ -127,8 +242,8 @@ const Hod1 = () => {
               </tr>
             </thead>
             <tbody>
-              {requests.length > 0 ? (
-                requests.map((req) => (
+              {getFilteredRequests().length > 0 ? (
+                getFilteredRequests().map((req) => (
                   <tr key={req._id} className="border-b hover:bg-gray-50">
                     <td className="p-3 text-sm text-gray-600">{req._id.substring(18, 24)}...</td>
                     <td className="p-3">{req.name}</td>
@@ -168,7 +283,7 @@ const Hod1 = () => {
               ) : (
                 <tr>
                   <td colSpan="9" className="p-3 text-center text-gray-600">
-                    No requests found
+                    No {filter === "all" ? "" : filter} requests found
                   </td>
                 </tr>
               )}

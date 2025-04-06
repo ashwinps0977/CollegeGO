@@ -16,5 +16,14 @@
     "url": "https://github.com/ashwinps0977/CollegeGO/issues"
   },
   "homepage": "https://github.com/ashwinps0977/CollegeGO#readme",
-  "description": ""
+  "description": "",
+  "dependencies": {
+    "html2canvas": "^1.4.1",
+    "qrcode.react": "^4.2.0",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/html2canvas": "^0.5.35",
+    "@types/uuid": "^10.0.0"
+  }
 }

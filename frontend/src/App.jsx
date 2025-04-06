@@ -18,6 +18,8 @@ import CreateAccount from "./pages/createacct";
 import Hod1 from "./pages/Hod1";
 import Ticketbooking1 from "./pages/Ticketbooking1";
 import Payment from "./pages/Payment";
+import Student from "./pages/student";
+import StaffDashboard from "./pages/staffDashboard";
 
 const App = () => {
   const [users, setUsers] = useState([]);
@@ -46,10 +48,17 @@ const App = () => {
         <Route path='/loginpage' element={<LoginPage />} />
         <Route path='/createacct' element={<CreateAccount />} />
         <Route path='/Hod1' element={<Hod1 />} />
-        <Route path='/tick' element={<Ticketbooking1 />} />
-        <Route path='/pay' element={<Payment />} />
+        
+        <Route path='/payment' element={<Payment />} />
         // In your frontend router (App.js or similar)
         <Route path="/payment/:requestId" element={<Payment />} />
+        <Route path="/student" element={<Student />} />
+        <Route path="/ticket/:requestId" element={<Ticketbooking1 />} />
+        <Route path="/staff-dashboard" element={<StaffDashboard />} />
+        
+        
+        
+        
       </Routes>
       <Footer />
       <div>

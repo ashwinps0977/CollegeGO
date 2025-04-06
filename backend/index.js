@@ -6,12 +6,13 @@ const cors = require("cors");
 const bodyParser = require("body-parser");
 const bcrypt = require("bcrypt");
 const twilio = require('twilio');
-const crypto = require('crypto'); // For password reset tokens
+const crypto = require('crypto'); // For password reset tokens and verification codes
 
 const User = require("./models/user");
 const HOD = require("./models/hod");
 const Warden = require("./models/warden");
 const Request = require("./models/request");
+const BusFaculty = require("./models/busFaculty");
 
 const app = express();
 const PORT = 5001;
@@ -21,7 +22,10 @@ app.use(cors());
 app.use(bodyParser.json());
 
 // Connect to MongoDB
-mongoose.connect("mongodb://localhost:27017/collegeGO");
+mongoose.connect("mongodb://localhost:27017/collegeGO", {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
 const db = mongoose.connection;
 db.once("open", () => console.log("✅ Connected to MongoDB"));
 
@@ -75,6 +79,7 @@ app.post("/login", async (req, res) => {
   if (role === "HOD") Model = HOD;
   else if (role === "Student") Model = User;
   else if (role === "Warden") Model = Warden;
+  else if (role === "Bus-Faculty") Model = BusFaculty;
   else {
     return res.status(400).json({ error: "Invalid role selected" });
   }
@@ -156,7 +161,7 @@ app.get("/getUser/:username", async (req, res) => {
   }
 });
 
-// GET USER REQUESTS
+// GET USER REQUESTS (Updated with detailed status information)
 app.get("/getUserRequests/:username", async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username });
@@ -164,15 +169,79 @@ app.get("/getUserRequests/:username", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const requests = await Request.find({ 
-      name: user.name,
-      status: "Approved"
-    }).sort({ createdAt: -1 });
+    const requests = await Request.find({ name: user.name }).sort({ createdAt: -1 });
+    
+    // Enhance each request with detailed status information
+    const enhancedRequests = requests.map(request => {
+      let statusDetails = {
+        overallStatus: "Pending",
+        hodStatus: request.status,
+        wardenStatus: request.wardenApproval,
+        paymentStatus: request.paymentStatus,
+        isFullyApproved: request.finalApproval === "Approved",
+        isRejected: request.finalApproval === "Rejected" || request.status === "Rejected",
+        approvalDates: {
+          hod: request.hodApprovalDate,
+          warden: request.wardenApprovalDate
+        }
+      };
 
-    res.json(requests);
+      // Determine overall status
+      if (request.finalApproval === "Approved") {
+        statusDetails.overallStatus = "Approved";
+      } else if (request.finalApproval === "Rejected") {
+        statusDetails.overallStatus = "Rejected by Warden";
+      } else if (request.status === "Rejected") {
+        statusDetails.overallStatus = "Rejected by HOD";
+      } else if (request.status === "Approved" && request.finalApproval === "Pending") {
+        statusDetails.overallStatus = "Pending Warden Approval";
+      }
+
+      return {
+        ...request.toObject(),
+        statusDetails
+      };
+    });
+
+    res.json(enhancedRequests);
   } catch (error) {
     console.error("Error fetching user requests:", error);
     res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// GET NOTIFICATIONS
+app.get("/getNotifications/:username", async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.params.username });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Sort notifications by createdAt in descending order (newest first)
+    const notifications = (user.notifications || []).sort((a, b) => {
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
+    // Add additional metadata to each notification
+    const enhancedNotifications = notifications.map(notification => {
+      return {
+        ...notification.toObject ? notification.toObject() : notification,
+        isNew: notification.isNew !== false, // Default to true if not specified
+        timestamp: notification.createdAt ? new Date(notification.createdAt).getTime() : Date.now()
+      };
+    });
+
+    res.json(enhancedNotifications);
+  } catch (error) {
+    console.error("Error fetching notifications:", {
+      error: error.message,
+      stack: error.stack
+    });
+    res.status(500).json({ 
+      error: "Internal Server Error",
+      details: error.message 
+    });
   }
 });
 
@@ -219,6 +288,7 @@ app.post("/addRequest", async (req, res) => {
       date,
       status: "Pending",
       finalApproval: "Pending",
+      wardenApproval: "Pending"
     });
 
     await newRequest.save();
@@ -229,17 +299,31 @@ app.post("/addRequest", async (req, res) => {
   }
 });
 
-// UPDATE REQUEST STATUS
+// UPDATE REQUEST STATUS (HOD Approval)
 app.put("/updateRequest/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
 
     if (!status || !["Approved", "Rejected"].includes(status)) {
-      return res.status(400).json({ error: "Valid status ('Approved' or 'Rejected') is required" });
+      return res.status(400).json({ 
+        success: false,
+        error: "Valid status ('Approved' or 'Rejected') is required" 
+      });
     }
 
-    const updateData = { status };
+    const request = await Request.findById(id);
+    if (!request) {
+      return res.status(404).json({ 
+        success: false,
+        error: "Request not found" 
+      });
+    }
+
+    const updateData = { 
+      status,
+      hodApprovalDate: new Date()
+    };
     
     if (status === "Approved") {
       updateData.finalApproval = "Pending";
@@ -253,18 +337,45 @@ app.put("/updateRequest/:id", async (req, res) => {
       { new: true }
     );
 
-    if (!updatedRequest) {
-      return res.status(404).json({ error: "Request not found" });
+    // Add notification for student
+    if (status === "Approved") {
+      await User.findOneAndUpdate(
+        { name: updatedRequest.name },
+        {
+          $push: {
+            notifications: {
+              message: `YOUR REQUEST HAS BEEN APPROVED BY HOD - ${updatedRequest.purpose.toUpperCase()} ON ${new Date(updatedRequest.date).toLocaleDateString()} - WAITING FOR WARDEN APPROVAL`,
+              type: "status-update",
+              requestId: updatedRequest._id,
+              createdAt: new Date(),
+              requestDetails: {
+                purpose: updatedRequest.purpose,
+                date: updatedRequest.date,
+                destination: updatedRequest.destination,
+                status: "HOD Approved"
+              }
+            }
+          }
+        }
+      );
     }
 
-    res.json({ message: "Request updated successfully", request: updatedRequest });
+    res.json({ 
+      success: true,
+      message: "Request updated successfully", 
+      request: updatedRequest 
+    });
   } catch (error) {
     console.error("❌ Error updating request status:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ 
+      success: false,
+      error: "Internal Server Error",
+      details: error.message 
+    });
   }
 });
 
-// FINAL APPROVAL WITH NOTIFICATIONS AND SMS
+// FINAL APPROVAL WITH NOTIFICATIONS AND SMS (Warden Approval)
 app.put("/finalApproveRequest/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -297,42 +408,48 @@ app.put("/finalApproveRequest/:id", async (req, res) => {
 
     // Update request status
     const requestUpdate = { 
-      finalApproval: action === "approve" ? "Approved" : "Rejected"
+      finalApproval: action === "approve" ? "Approved" : "Rejected",
+      wardenApproval: action === "approve" ? "Approved" : "Rejected",
+      wardenApprovalDate: new Date()
     };
     const updatedRequest = await Request.findByIdAndUpdate(id, requestUpdate, { new: true });
 
-    // Send SMS and add notification only for approval
+    // Send SMS and add notification
     let smsResult = { sent: false, error: null };
-    if (action === "approve") {
-      try {
-        const userUpdate = {
-          $push: {
-            notifications: {
-              message: notificationMessage || "YOUR REQUEST HAS BEEN APPROVED - MAKE PAYMENT TO GRAB YOUR TICKET",
-              type: "payment",
-              requestId: request._id,
-              createdAt: new Date(),
-              requestDetails: requestData || {
-                purpose: request.purpose,
-                date: request.date,
-                destination: request.destination,
-                status: "Approved"
-              }
+    try {
+      const notificationMsg = action === "approve" 
+        ? `YOUR REQUEST HAS BEEN FULLY APPROVED - ${request.purpose.toUpperCase()} ON ${new Date(request.date).toLocaleDateString()} - HOD & WARDEN APPROVED - MAKE PAYMENT TO GRAB YOUR TICKET`
+        : `YOUR REQUEST HAS BEEN REJECTED BY WARDEN - ${request.purpose.toUpperCase()} ON ${new Date(request.date).toLocaleDateString()}`;
+
+      const userUpdate = {
+        $push: {
+          notifications: {
+            message: notificationMessage || notificationMsg,
+            type: action === "approve" ? "payment" : "status-update",
+            requestId: request._id,
+            createdAt: new Date(),
+            requestDetails: requestData || {
+              purpose: request.purpose,
+              date: request.date,
+              destination: request.destination,
+              status: action === "approve" ? "Fully Approved" : "Rejected by Warden"
             }
           }
-        };
-        
-        // Update user with notification
-        await User.findOneAndUpdate(
-          { name: request.name },
-          userUpdate,
-          { new: true }
-        );
+        }
+      };
+      
+      // Update user with notification
+      await User.findOneAndUpdate(
+        { name: request.name },
+        userUpdate,
+        { new: true }
+      );
 
-        // Send SMS notification
+      // Send SMS notification if approved
+      if (action === "approve") {
         try {
           const message = await twilioClient.messages.create({
-            body: notificationMessage || "YOUR REQUEST HAS BEEN APPROVED. MAKE PAYMENT TO GET YOUR BUS TICKET",
+            body: notificationMessage || notificationMsg,
             to: `+91${user.mobile}`,
             from: process.env.TWILIO_PHONE_NUMBER
           });
@@ -349,10 +466,9 @@ app.put("/finalApproveRequest/:id", async (req, res) => {
             message: smsError.message
           };
         }
-      } catch (error) {
-        console.error("❌ Error adding notification:", error);
-        // Continue even if notification fails since request is already approved
       }
+    } catch (error) {
+      console.error("❌ Error adding notification:", error);
     }
 
     res.json({ 
@@ -373,15 +489,25 @@ app.put("/finalApproveRequest/:id", async (req, res) => {
   }
 });
 
-// PAYMENT ROUTE - Updated version
+// PAYMENT ROUTE - Updated with more reliable verification code generation
 app.post("/makePayment", async (req, res) => {
   try {
     const { requestId } = req.body;
     
+    // Generate a unique ticket ID and 4-digit verification code
+    const ticketId = crypto.randomBytes(8).toString('hex');
+    const verificationCode = Math.floor(1000 + Math.random() * 9000).toString(); // 4-digit numeric code
+    const timestamp = new Date();
+
     // Find and update the request
     const updatedRequest = await Request.findByIdAndUpdate(
       requestId, 
-      { paymentStatus: "Paid" },
+      { 
+        paymentStatus: "Paid",
+        ticketId,
+        verificationCode,
+        ticketGeneratedAt: timestamp
+      },
       { new: true }
     );
     
@@ -406,12 +532,96 @@ app.post("/makePayment", async (req, res) => {
         date: updatedRequest.date,
         purpose: updatedRequest.purpose,
         destination: updatedRequest.destination,
-        requestId: updatedRequest._id
+        ticketId,
+        verificationCode,
+        timestamp
       }
     });
   } catch (error) {
     console.error("Payment error:", error);
     res.status(500).json({ error: "Payment processing failed" });
+  }
+});
+
+// GET TICKET DATA BY TICKET ID (UPDATED)
+app.get("/getTicket/:ticketId", async (req, res) => {
+  try {
+    const request = await Request.findOne({ 
+      ticketId: req.params.ticketId,
+      paymentStatus: "Paid"
+    });
+    
+    if (!request) {
+      return res.status(404).json({ error: "Ticket not found or payment not completed" });
+    }
+
+    const user = await User.findOne({ name: request.name });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({
+      name: user.name,
+      department: user.branch,
+      semester: user.semester,
+      date: request.date,
+      purpose: request.purpose,
+      destination: request.destination,
+      ticketId: request.ticketId,
+      verificationCode: request.verificationCode,
+      timestamp: request.ticketGeneratedAt
+    });
+  } catch (error) {
+    console.error("Error fetching ticket:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// VERIFY TICKET ROUTE
+app.post("/verifyTicket", async (req, res) => {
+  try {
+    const { ticketId, verificationCode } = req.body;
+    
+    if (!ticketId || !verificationCode) {
+      return res.status(400).json({ error: "Ticket ID and verification code are required" });
+    }
+
+    const request = await Request.findOne({ 
+      ticketId,
+      verificationCode,
+      paymentStatus: "Paid"
+    });
+
+    if (!request) {
+      return res.status(404).json({ 
+        success: false,
+        error: "Invalid ticket or verification code" 
+      });
+    }
+
+    const user = await User.findOne({ name: request.name });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ 
+      success: true,
+      message: "Ticket verified successfully",
+      ticketData: {
+        name: user.name,
+        department: user.branch,
+        semester: user.semester,
+        date: request.date,
+        purpose: request.purpose,
+        destination: request.destination,
+        ticketId: request.ticketId,
+        verificationCode: request.verificationCode,
+        timestamp: request.ticketGeneratedAt
+      }
+    });
+  } catch (error) {
+    console.error("Error verifying ticket:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
@@ -428,6 +638,7 @@ app.post("/forgot-password", async (req, res) => {
     if (role === "HOD") Model = HOD;
     else if (role === "Student") Model = User;
     else if (role === "Warden") Model = Warden;
+    else if (role === "Bus-Faculty") Model = BusFaculty;
     else {
       return res.status(400).json({ error: "Invalid role selected" });
     }
@@ -474,6 +685,7 @@ app.post("/reset-password", async (req, res) => {
     if (role === "HOD") Model = HOD;
     else if (role === "Student") Model = User;
     else if (role === "Warden") Model = Warden;
+    else if (role === "Bus-Faculty") Model = BusFaculty;
     else {
       return res.status(400).json({ error: "Invalid role selected" });
     }

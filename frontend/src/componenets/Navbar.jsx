@@ -27,8 +27,12 @@ const Navbar = () => {
         // Listen for storage changes to update UI when login occurs in another tab
         window.addEventListener('storage', checkAuthStatus);
         
+        // Also listen for custom event that we'll dispatch after login/signup
+        window.addEventListener('user-authenticated', checkAuthStatus);
+        
         return () => {
             window.removeEventListener('storage', checkAuthStatus);
+            window.removeEventListener('user-authenticated', checkAuthStatus);
         };
     }, []);
 
@@ -37,15 +41,17 @@ const Navbar = () => {
         setIsLoggedIn(false);
         setUserData(null);
         navigate('/loginpage');
+        // Dispatch event to notify other components
+        window.dispatchEvent(new Event('user-authenticated'));
     };
 
     return (
         <div className='flex items-center justify-between text-sm py-4 mb-5 border-b border-gray-400'>
             <img className='w-44 cursor-pointer' src={assets.collogo} alt="Logo" onClick={() => navigate('/')} />
             
-            <ul className='hidden md:flex items-center gap-8 font-medium'> {/* Increased gap from gap-5 to gap-8 */}
+            <ul className='hidden md:flex items-center gap-8 font-medium'>
                 <NavLink to='/'><li>HOME</li></NavLink>
-                <NavLink to='/request1'><li>REQUEST</li></NavLink>
+                <NavLink to='/loginpage'><li>REQUEST</li></NavLink>
                 <NavLink to='/tick'><li>TICKET</li></NavLink>
                 <NavLink to='/about'><li>ABOUT</li></NavLink>
                 <NavLink to='/contact'><li>CONTACT</li></NavLink>
@@ -66,8 +72,7 @@ const Navbar = () => {
                                 {userData?.name && (
                                     <p className='font-semibold text-black'>{userData.name}</p>
                                 )}
-                                <p onClick={() => navigate('/myprofile')} className='hover:text-black cursor-pointer'>My Profile</p>
-                                <p onClick={() => navigate('/tick')} className='hover:text-black cursor-pointer'>My Ticket</p>
+                               
                                 <p onClick={handleLogout} className='hover:text-black cursor-pointer'>Logout</p>
                             </div>
                         </div>

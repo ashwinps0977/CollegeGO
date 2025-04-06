@@ -22,9 +22,7 @@ const Payment = () => {
       
       if (response.data.success) {
         setSuccess(true);
-        setTimeout(() => navigate('/tick', { 
-          state: { ticketData: response.data.ticketData } 
-        }), 2000);
+        setTimeout(() => navigate('/student'), 2000);
       }
     } catch (error) {
       setError(error.response?.data?.error || "Payment failed. Please try again.");

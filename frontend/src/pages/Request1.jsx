@@ -6,14 +6,14 @@ const Request1 = () => {
   const navigate = useNavigate();
   const today = new Date().toISOString().split("T")[0];
   const destinations = [
-    "PALA",
-    "ETTUMAANOOR",
-    "KOTTAYAM",
-    "THODUPUZHA",
-    "MUVATTUPUZHA",
-    "KOOTHATTUKULAM",
-    "KANJIRAPPALLY",
-    "MALLAPALLY"
+    "PALA - B1",
+    "ETTUMAANOOR - B2",
+    "KOTTAYAM - B3",
+    "THODUPUZHA - B4",
+    "MUVATTUPUZHA - B5",
+    "KOOTHATTUKULAM - B6",
+    "KANJIRAPPALLY - B7",
+    "MALLAPALLY - B8"
   ];
 
   const [request, setRequest] = useState({
@@ -31,19 +31,22 @@ const Request1 = () => {
 
   useEffect(() => {
     const storedUser = sessionStorage.getItem("user");
-    if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      setUserData(parsedUser);
-      setRequest((prev) => ({
-        ...prev,
-        name: parsedUser.name || "",
-        branch: parsedUser.branch || "",
-        semester: parsedUser.semester || "",
-      }));
-
-      fetchUserData(parsedUser.username);
+    if (!storedUser) {
+      navigate("/");
+      return;
     }
-  }, []);
+    
+    const parsedUser = JSON.parse(storedUser);
+    setUserData(parsedUser);
+    setRequest((prev) => ({
+      ...prev,
+      name: parsedUser.name || "",
+      branch: parsedUser.branch || "",
+      semester: parsedUser.semester || "",
+    }));
+
+    fetchUserData(parsedUser.username);
+  }, [navigate]);
 
   const fetchUserData = async (username) => {
     try {
@@ -89,6 +92,11 @@ const Request1 = () => {
       console.error("❌ Error submitting request:", error);
       alert(`Failed to submit request: ${error.response?.data?.error || error.message}`);
     }
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem("user");
+    navigate("/");
   };
 
   return (
@@ -145,13 +153,23 @@ const Request1 = () => {
               </div>
 
               <button 
-                onClick={() => navigate("/myprofile")} 
+                onClick={() => navigate("/student")}
                 className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition flex items-center justify-center"
               >
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
-                View Full Profile
+                View Movements
+              </button>
+
+              <button 
+                onClick={handleLogout}
+                className="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition flex items-center justify-center"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Logout
               </button>
             </div>
           </div>
@@ -260,12 +278,7 @@ const Request1 = () => {
                 </div>
                 <h2 className="text-2xl font-semibold text-green-600">REQUEST SUBMITTED</h2>
                 <p className="text-gray-700 mt-2">Your request has been successfully forwarded to HOD for approval.</p>
-                <button 
-                  onClick={() => navigate("/")} 
-                  className="mt-6 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
-                >
-                  Return to Dashboard
-                </button>
+                
               </div>
             )}
           </div>

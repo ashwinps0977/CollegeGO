@@ -9,6 +9,14 @@ const Warden1 = () => {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
+  // Route protection - check if user is logged in
+  useEffect(() => {
+    const storedUser = sessionStorage.getItem("user");
+    if (!storedUser) {
+      navigate("/");
+    }
+  }, [navigate]);
+
   // Fetch approved requests from the backend
   useEffect(() => {
     fetchApprovedRequests();
