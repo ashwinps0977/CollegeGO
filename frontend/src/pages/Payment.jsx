@@ -22,6 +22,17 @@ const Payment = () => {
       
       if (response.data.success) {
         setSuccess(true);
+        // Update the user's requests after successful payment
+        const user = JSON.parse(sessionStorage.getItem("user"));
+        if (user) {
+          try {
+            await axios.get(`http://localhost:5001/getUserRequests/${user.username}`);
+            // The Student component will refresh its own data when navigated back to
+          } catch (err) {
+            console.error("Error refreshing requests:", err);
+            // This is non-critical so we'll continue despite the error
+          }
+        }
         setTimeout(() => navigate('/student'), 2000);
       }
     } catch (error) {

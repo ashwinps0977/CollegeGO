@@ -6,7 +6,7 @@ import axios from 'axios';
 
 const Ticketbooking1 = () => {
   const navigate = useNavigate();
-  const { requestId } = useParams();
+  const { ticketId } = useParams();
   const [ticketData, setTicketData] = useState({
     name: "",
     department: "",
@@ -26,36 +26,63 @@ const Ticketbooking1 = () => {
     const fetchTicketData = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`http://localhost:5001/getTicket/${requestId}`);
-        const data = response.data;
-        
-        if (!data) {
-          throw new Error("Ticket data not found");
+        if (!ticketId) {
+          console.error("Ticket ID parameter is missing");
+          throw new Error("Ticket ID is missing");
         }
 
-        console.log("Ticket data:", data); // Debug log
+        console.log(`Fetching ticket data for ID: ${ticketId}`);
+        const response = await axios.get(`http://localhost:5001/getTicket/${ticketId}`);
+        
+        console.log("Ticket API response:", response.data);
+        if (!response.data.success) {
+          throw new Error(response.data.error || "Ticket data not found");
+        }
+
+        const { ticketData } = response.data;
+        if (!ticketData) {
+          throw new Error("Ticket data not found in response");
+        }
+
+        console.log("Ticket date from backend:", ticketData.date);
+        console.log("Parsed ticket date:", new Date(ticketData.date));
+        console.log("Current date:", new Date());
 
         setTicketData({
-          name: data.name,
-          department: data.department,
-          semester: data.semester,
-          date: data.date,
-          purpose: data.purpose,
-          destination: data.destination,
-          ticketId: data.ticketId,
-          verificationCode: data.verificationCode,
-          timestamp: data.timestamp
+          name: ticketData.name,
+          department: ticketData.department,
+          semester: ticketData.semester,
+          date: ticketData.date,
+          purpose: ticketData.purpose,
+          destination: ticketData.destination,
+          ticketId: ticketData.ticketId,
+          verificationCode: ticketData.verificationCode,
+          timestamp: ticketData.timestamp
         });
       } catch (err) {
         console.error("Error fetching ticket data:", err);
-        setError(err.message || "Failed to load ticket data");
+        setError(err.response?.data?.error || err.message || "Failed to load ticket data");
       } finally {
         setLoading(false);
       }
     };
 
     fetchTicketData();
-  }, [requestId]);
+  }, [ticketId]);
+
+  const isTicketValid = () => {
+    if (!ticketData.date) return false;
+    
+    // Create date objects and set to same time (midnight) to compare only dates
+    const ticketDate = new Date(ticketData.date);
+    const today = new Date();
+    
+    // Normalize both dates to midnight for accurate comparison
+    ticketDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    
+    return ticketDate.getTime() === today.getTime();
+  };
 
   const downloadTicket = () => {
     if (!ticketRef.current) return;
@@ -166,7 +193,6 @@ const Ticketbooking1 = () => {
             Ticket ID: {ticketData.ticketId}
           </p>
           
-          {/* Updated Verification Code Section */}
           <div className="mt-4 w-full">
             <div className="bg-gray-100 p-3 rounded-lg text-center">
               <p className="text-sm font-semibold text-gray-700 mb-1">VERIFICATION CODE</p>
@@ -177,8 +203,12 @@ const Ticketbooking1 = () => {
           </div>
         </div>
 
-        <div className="bg-blue-600 text-white text-center py-2 text-xs">
-          Valid only for {ticketData.date ? new Date(ticketData.date).toLocaleDateString() : 'specified date'}
+        <div className={`text-white text-center py-2 text-xs ${isTicketValid() ? 'bg-green-600' : 'bg-red-600'}`}>
+          {isTicketValid() ? (
+            `Valid for ${new Date(ticketData.date).toLocaleDateString()}`
+          ) : (
+            'EXPIRED - Not valid for today'
+          )}
         </div>
       </div>
 

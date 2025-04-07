@@ -489,15 +489,31 @@ app.put("/finalApproveRequest/:id", async (req, res) => {
   }
 });
 
+// GET ALL WARDEN REQUESTS (Approved by HOD, both pending and finalized)
+app.get("/getAllWardenRequests", async (req, res) => {
+  try {
+    const requests = await Request.find({ 
+      status: "Approved" // Only requests that have been approved by HOD
+    }).sort({ createdAt: -1 });
+    res.json(requests);
+  } catch (error) {
+    console.error("❌ Error fetching warden requests:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 // PAYMENT ROUTE - Updated with more reliable verification code generation
 app.post("/makePayment", async (req, res) => {
   try {
     const { requestId } = req.body;
+    console.log(`Processing payment for request: ${requestId}`); // Added logging
     
     // Generate a unique ticket ID and 4-digit verification code
     const ticketId = crypto.randomBytes(8).toString('hex');
     const verificationCode = Math.floor(1000 + Math.random() * 9000).toString(); // 4-digit numeric code
     const timestamp = new Date();
+
+    console.log(`Generated ticket ID: ${ticketId}`); // Added logging
 
     // Find and update the request
     const updatedRequest = await Request.findByIdAndUpdate(
@@ -546,56 +562,87 @@ app.post("/makePayment", async (req, res) => {
 // GET TICKET DATA BY TICKET ID (UPDATED)
 app.get("/getTicket/:ticketId", async (req, res) => {
   try {
+    console.log(`Fetching ticket with ID: ${req.params.ticketId}`); // Added logging
     const request = await Request.findOne({ 
       ticketId: req.params.ticketId,
       paymentStatus: "Paid"
     });
     
     if (!request) {
-      return res.status(404).json({ error: "Ticket not found or payment not completed" });
+      console.log(`Ticket not found or payment not completed for ID: ${req.params.ticketId}`); // Added logging
+      return res.status(404).json({ 
+        success: false,
+        error: "Ticket not found or payment not completed" 
+      });
     }
 
     const user = await User.findOne({ name: request.name });
     if (!user) {
-      return res.status(404).json({ error: "User not found" });
+      return res.status(404).json({ 
+        success: false,
+        error: "User not found" 
+      });
     }
 
-    res.json({
-      name: user.name,
-      department: user.branch,
-      semester: user.semester,
-      date: request.date,
-      purpose: request.purpose,
-      destination: request.destination,
-      ticketId: request.ticketId,
-      verificationCode: request.verificationCode,
-      timestamp: request.ticketGeneratedAt
+    res.json({ 
+      success: true,
+      ticketData: {
+        name: user.name,
+        department: user.branch,
+        semester: user.semester,
+        date: request.date,
+        purpose: request.purpose,
+        destination: request.destination,
+        ticketId: request.ticketId,
+        verificationCode: request.verificationCode,
+        timestamp: request.ticketGeneratedAt
+      }
     });
   } catch (error) {
     console.error("Error fetching ticket:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ 
+      success: false,
+      error: "Internal Server Error" 
+    });
   }
 });
 
-// VERIFY TICKET ROUTE
+// VERIFY TICKET ROUTE (Modified to make verification code optional)
 app.post("/verifyTicket", async (req, res) => {
   try {
-    const { ticketId, verificationCode } = req.body;
+    const { ticketId } = req.body;
     
-    if (!ticketId || !verificationCode) {
-      return res.status(400).json({ error: "Ticket ID and verification code are required" });
+    if (!ticketId) {
+      return res.status(400).json({ 
+        success: false,
+        error: "Ticket ID is required" 
+      });
     }
 
     const request = await Request.findOne({ 
       ticketId,
-      verificationCode,
       paymentStatus: "Paid"
     });
 
     if (!request) {
       return res.status(404).json({ 
         success: false,
-        error: "Invalid ticket or verification code" 
+        error: "Invalid ticket or payment not completed" 
+      });
+    }
+
+    // Check if ticket is for today
+    const today = new Date();
+    const ticketDate = new Date(request.date);
+    if (
+      ticketDate.getDate() !== today.getDate() ||
+      ticketDate.getMonth() !== today.getMonth() ||
+      ticketDate.getFullYear() !== today.getFullYear()
+    ) {
+      return res.json({
+        success: false,
+        error: "Ticket is not valid for today",
+        isExpired: true
       });
     }
 
@@ -621,7 +668,10 @@ app.post("/verifyTicket", async (req, res) => {
     });
   } catch (error) {
     console.error("Error verifying ticket:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ 
+      success: false,
+      error: "Internal Server Error" 
+    });
   }
 });
 

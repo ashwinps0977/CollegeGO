@@ -53,8 +53,9 @@ const App = () => {
         // In your frontend router (App.js or similar)
         <Route path="/payment/:requestId" element={<Payment />} />
         <Route path="/student" element={<Student />} />
-        <Route path="/ticket/:requestId" element={<Ticketbooking1 />} />
+        
         <Route path="/staff-dashboard" element={<StaffDashboard />} />
+        <Route path="/ticket/:ticketId" element={<Ticketbooking1 />} />
         
         
         

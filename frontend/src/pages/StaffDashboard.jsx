@@ -30,20 +30,18 @@ const StaffDashboard = () => {
     setTicketData(null);
 
     try {
-      // Get ticket details directly using the ticket ID
-      const ticketResponse = await axios.get(`http://localhost:5001/getTicket/${ticketId}`);
-      const ticketDetails = ticketResponse.data;
-
-      if (!ticketDetails) {
-        throw new Error("Ticket not found");
+      // Verify the ticket exists and is paid
+      const ticketResponse = await axios.post('http://localhost:5001/verifyTicket', {
+        ticketId
+      });
+      
+      if (!ticketResponse.data.success) {
+        throw new Error(ticketResponse.data.error || "Invalid ticket");
       }
 
-      // Check if ticket is paid
-      if (ticketDetails.paymentStatus !== "Paid") {
-        throw new Error("Ticket payment not completed");
-      }
-
-      // Format the data for display
+      const ticketDetails = ticketResponse.data.ticketData;
+      
+      // Format for display
       const formattedData = {
         name: ticketDetails.name,
         department: ticketDetails.department,
@@ -52,8 +50,8 @@ const StaffDashboard = () => {
         purpose: ticketDetails.purpose,
         destination: ticketDetails.destination,
         ticketId: ticketDetails.ticketId,
-        verificationCode: ticketDetails.verificationCode,
-        timestamp: ticketDetails.ticketGeneratedAt
+        timestamp: ticketDetails.timestamp,
+        isValid: true
       };
 
       setTicketData(formattedData);
@@ -71,6 +69,7 @@ const StaffDashboard = () => {
     } catch (err) {
       console.error("Verification error:", err);
       setError(err.response?.data?.error || err.message || "Failed to verify ticket");
+      setTicketData({ isValid: false }); // Mark as invalid for UI
     } finally {
       setIsLoading(false);
     }
@@ -163,41 +162,71 @@ const StaffDashboard = () => {
 
             {/* Verification Result */}
             {ticketData && (
-              <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                <h3 className="text-lg font-semibold text-green-800 mb-2">Ticket Verified Successfully</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-sm text-gray-600">Student Name</p>
-                      <p className="font-medium">{ticketData.name}</p>
+              <div className={`mt-6 p-4 rounded-lg border ${
+                ticketData.isValid 
+                  ? "bg-green-50 border-green-200" 
+                  : "bg-red-50 border-red-200"
+              }`}>
+                <h3 className={`text-lg font-semibold mb-2 ${
+                  ticketData.isValid ? "text-green-800" : "text-red-800"
+                }`}>
+                  {ticketData.isValid ? "✅ Ticket Verified Successfully" : "❌ Ticket Verification Failed"}
+                </h3>
+                
+                {ticketData.isValid ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div>
+                        <p className="text-sm text-gray-600">Student Name</p>
+                        <p className="font-medium">{ticketData.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Department</p>
+                        <p className="font-medium">{ticketData.department}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Semester</p>
+                        <p className="font-medium">{ticketData.semester}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Department</p>
-                      <p className="font-medium">{ticketData.department}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Semester</p>
-                      <p className="font-medium">{ticketData.semester}</p>
+                    <div className="space-y-2">
+                      <div>
+                        <p className="text-sm text-gray-600">Travel Date</p>
+                        <p className="font-medium">{formatDate(ticketData.date)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Destination</p>
+                        <p className="font-medium">{ticketData.destination}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Purpose</p>
+                        <p className="font-medium">{ticketData.purpose}</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-sm text-gray-600">Travel Date</p>
-                      <p className="font-medium">{formatDate(ticketData.date)}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Destination</p>
-                      <p className="font-medium">{ticketData.destination}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Purpose</p>
-                      <p className="font-medium">{ticketData.purpose}</p>
-                    </div>
-                  </div>
-                </div>
+                ) : (
+                  <p className="text-red-600">{error}</p>
+                )}
+                
                 <div className="mt-3 text-sm text-gray-500">
-                  <p>Ticket ID: {ticketData.ticketId}</p>
-                  <p>Issued at: {new Date(ticketData.timestamp).toLocaleString()}</p>
+                  <p>Verified at: {new Date().toLocaleString()}</p>
+                  {ticketData.isValid && (
+                    <>
+                      <p>Ticket ID: {ticketData.ticketId}</p>
+                      <p>Issued at: {new Date(ticketData.timestamp).toLocaleString()}</p>
+                    </>
+                  )}
+                  {!ticketData.isValid && (
+                    <button 
+                      onClick={() => {
+                        setTicketId("");
+                        setTicketData(null);
+                      }}
+                      className="mt-2 text-blue-600 hover:text-blue-800"
+                    >
+                      Try again
+                    </button>
+                  )}
                 </div>
               </div>
             )}

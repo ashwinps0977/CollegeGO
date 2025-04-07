@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
-import { FaCheckCircle, FaTimesCircle, FaClock, FaBell, FaTicketAlt, FaEye } from "react-icons/fa";
+import { FaCheckCircle, FaTimesCircle, FaClock, FaBell, FaTicketAlt, FaEye, FaExclamationTriangle } from "react-icons/fa";
 
 const Student = () => {
   const navigate = useNavigate();
@@ -11,6 +11,7 @@ const Student = () => {
   const [userData, setUserData] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const storedUser = sessionStorage.getItem("user");
@@ -27,10 +28,12 @@ const Student = () => {
   const fetchRequests = async (username) => {
     try {
       setLoading(true);
+      setError(null);
       const response = await axios.get(`http://localhost:5001/getUserRequests/${username}`);
       setRequests(response.data);
     } catch (error) {
       console.error("Error fetching requests:", error);
+      setError("Failed to load requests. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -50,6 +53,15 @@ const Student = () => {
 
   const handleTakeTicket = (requestId) => {
     navigate(`/payment/${requestId}`);
+  };
+
+  const handleViewTicket = (request) => {
+    if (!request.ticketId) {
+      setError("Ticket is not yet generated. Please complete payment first.");
+      return;
+    }
+    // Pass the ticketId directly in the URL
+    navigate(`/ticket/${request.ticketId}`, { state: { requestData: request } });
   };
 
   const handleLogout = () => {
@@ -95,13 +107,17 @@ const Student = () => {
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">STUDENT DASHBOARD</h1>
-        <button 
-          onClick={handleLogout}
-          className="bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-red-600"
-        >
-          Logout
-        </button>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded relative">
+          <div className="flex items-center">
+            <FaExclamationTriangle className="mr-2" />
+            <span>{error}</span>
+          </div>
+        </div>
+      )}
 
       {userData && (
         <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
@@ -157,9 +173,16 @@ const Student = () => {
         <h2 className="text-xl font-semibold mb-4">Your Movement Requests</h2>
         
         {loading ? (
-          <p>Loading your requests...</p>
+          <div className="flex justify-center items-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          </div>
+        ) : error ? (
+          <div className="text-center py-8 text-red-500">
+            <FaExclamationTriangle className="inline-block mr-2" />
+            {error}
+          </div>
         ) : requests.length === 0 ? (
-          <p>No requests found</p>
+          <p className="text-center py-8 text-gray-500">No requests found</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
@@ -204,7 +227,7 @@ const Student = () => {
                         <>
                           {request.paymentStatus === "Paid" ? (
                             <button
-                              onClick={() => navigate(`/ticket/${request._id}`)}
+                              onClick={() => handleViewTicket(request)}
                               className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded flex items-center"
                             >
                               <FaEye className="mr-1" /> View Ticket

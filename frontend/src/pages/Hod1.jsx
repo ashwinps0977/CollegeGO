@@ -5,13 +5,13 @@ import axios from "axios";
 
 const Hod1 = () => {
   const navigate = useNavigate();
-  const [requests, setRequests] = useState([]);
+  const [allRequests, setAllRequests] = useState([]);
   const [approvedRequests, setApprovedRequests] = useState([]);
   const [rejectedRequests, setRejectedRequests] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("pending");
   const [notification, setNotification] = useState(null);
 
   // Route protection - check if user is logged in
@@ -31,21 +31,18 @@ const Hod1 = () => {
       if (response.data && Array.isArray(response.data)) {
         // Enhanced sorting with proper date handling
         const sortedRequests = [...response.data].sort((a, b) => {
-          // Get timestamps, falling back to createdAt if date doesn't exist
           const timeA = new Date(a.date || a.createdAt).getTime();
           const timeB = new Date(b.date || b.createdAt).getTime();
           
-          // Additional check for invalid dates
           if (isNaN(timeA) || isNaN(timeB)) {
             console.warn("Invalid date found in requests:", { a, b });
             return 0;
           }
           
-          // Sort newest first (descending order)
           return timeB - timeA;
         });
 
-        setRequests(sortedRequests);
+        setAllRequests(sortedRequests);
         setApprovedRequests(sortedRequests.filter(req => req.status === "Approved"));
         setRejectedRequests(sortedRequests.filter(req => req.status === "Rejected"));
         setPendingRequests(sortedRequests.filter(req => req.status === "Pending"));
@@ -69,42 +66,48 @@ const Hod1 = () => {
 
   const handleAction = async (id, newStatus) => {
     try {
-      const request = requests.find(req => req._id === id);
-      const response = await axios.put(`http://localhost:5001/updateRequest/${id}`, { status: newStatus });
+      setError(null);
+      const request = allRequests.find(req => req._id === id);
       
-      if (response.data.success) {
-        // Optimistic UI update
-        setRequests(prevRequests =>
-          prevRequests.map(req => 
-            req._id === id ? { ...req, status: newStatus } : req
-          )
-        );
-        
-        if (newStatus === "Approved") {
-          setNotification({
-            message: `Request approved and forwarded to Warden!`,
-            type: "success",
-            requestId: id,
-            studentName: request.name
-          });
-          
-          // Clear notification after 5 seconds
-          setTimeout(() => {
-            setNotification(null);
-          }, 5000);
-        }
-
-        // Refresh counts
-        fetchRequests();
-      } else {
-        console.error("❌ Error from server:", response.data.error);
-        setError(response.data.error || "Failed to update request status");
+      // Optimistic UI update
+      if (newStatus === "Approved") {
+        setPendingRequests(prev => prev.filter(req => req._id !== id));
+        setApprovedRequests(prev => [...prev, {...request, status: "Approved"}]);
+      } else if (newStatus === "Rejected") {
+        setPendingRequests(prev => prev.filter(req => req._id !== id));
+        setRejectedRequests(prev => [...prev, {...request, status: "Rejected"}]);
       }
+      
+      const response = await axios.put(`http://localhost:5001/updateRequest/${id}`, { 
+        status: newStatus 
+      });
+      
+      if (!response.data.success) {
+        throw new Error(response.data.error || "Failed to update request status");
+      }
+
+      if (newStatus === "Approved") {
+        setNotification({
+          message: `Request approved and forwarded to Warden!`,
+          type: "success",
+          requestId: id,
+          studentName: request.name
+        });
+      }
+
+      // Refresh data
+      fetchRequests();
     } catch (error) {
       console.error("❌ Error updating request status:", error);
+      
+      // Revert optimistic update
+      fetchRequests();
+      
       const errorMessage = error.response?.data?.error || 
                           error.response?.data?.details || 
+                          error.message ||
                           "Failed to update request status. Please try again.";
+      
       setError(errorMessage);
     }
   };
@@ -118,17 +121,42 @@ const Hod1 = () => {
     switch (filter) {
       case "approved":
         return approvedRequests;
-      case "pending":
-        return pendingRequests;
       case "rejected":
         return rejectedRequests;
+      case "pending":
+        return pendingRequests;
       default:
-        return requests;
+        return pendingRequests;
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-700">HOD DASHBOARD</h1>
+      </div>
+
+      {/* Notification */}
+      {notification && (
+        <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
+          notification.type === "success" ? "bg-green-500" : 
+          notification.type === "warning" ? "bg-yellow-500" : "bg-blue-500"
+        } text-white`}>
+          <div className="flex items-center">
+            {notification.type === "success" ? (
+              <FaCheckCircle className="mr-2" />
+            ) : (
+              <FaTimesCircle className="mr-2" />
+            )}
+            <span>{notification.message}</span>
+          </div>
+          <div className="text-sm mt-1">
+            Student: {notification.studentName} | ID: {notification.requestId.substring(18, 24)}...
+          </div>
+        </div>
+      )}
+
       {/* Error Message Display */}
       {error && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white p-4 rounded-lg shadow-lg z-50">
@@ -144,31 +172,6 @@ const Hod1 = () => {
           </div>
         </div>
       )}
-
-      {/* Notification */}
-      {notification && (
-        <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
-          notification.type === "success" ? "bg-green-500" : "bg-red-500"
-        } text-white`}>
-          <div className="flex items-center">
-            <FaCheckCircle className="mr-2" />
-            <span>{notification.message}</span>
-          </div>
-          <div className="text-sm mt-1">
-            Student: {notification.studentName} | ID: {notification.requestId.substring(18, 24)}...
-          </div>
-        </div>
-      )}
-
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-700">HOD DASHBOARD</h1>
-        <button 
-          onClick={handleLogout} 
-          className="bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-red-600"
-        >
-          Logout
-        </button>
-      </div>
 
       {/* Summary Boxes */}
       <div className="grid grid-cols-3 gap-6 mb-6">
@@ -205,15 +208,15 @@ const Hod1 = () => {
       <div className="bg-white p-6 rounded-lg shadow-lg overflow-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-700">
-            {filter === "all" ? "All" : filter.charAt(0).toUpperCase() + filter.slice(1)} 
-            Movement Requests (Newest First)
+            {filter === "pending" ? "Pending" : filter.charAt(0).toUpperCase() + filter.slice(1)} 
+            Movement Requests
           </h3>
-          {filter !== "all" && (
+          {filter !== "pending" && (
             <button 
-              onClick={() => setFilter("all")}
+              onClick={() => setFilter("pending")}
               className="bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600"
             >
-              Show All Requests
+              Show Pending Requests
             </button>
           )}
         </div>
@@ -252,11 +255,14 @@ const Hod1 = () => {
                     <td className="p-3">{req.purpose}</td>
                     <td className="p-3">{req.destination}</td>
                     <td className="p-3">{new Date(req.date).toLocaleDateString()}</td>
-                    <td className={`p-3 font-semibold 
-                        ${req.status === "Approved" ? "text-green-600" : 
-                          req.status === "Pending" ? "text-yellow-600" : 
-                          "text-red-600"}`}>
-                      {req.status}
+                    <td className={`p-3 font-semibold ${
+                      req.status === "Approved" ? "text-green-600" : 
+                      req.status === "Rejected" ? "text-red-600" : 
+                      "text-yellow-600"
+                    }`}>
+                      {req.status === "Approved" ? "HOD Approved" : 
+                       req.status === "Rejected" ? "HOD Rejected" : 
+                       "Pending"}
                     </td>
                     <td className="p-3">
                       {req.status === "Pending" && (
@@ -283,7 +289,7 @@ const Hod1 = () => {
               ) : (
                 <tr>
                   <td colSpan="9" className="p-3 text-center text-gray-600">
-                    No {filter === "all" ? "" : filter} requests found
+                    No {filter === "pending" ? "pending" : filter} requests found
                   </td>
                 </tr>
               )}
